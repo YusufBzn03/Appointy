@@ -1,40 +1,43 @@
+"use client";
+
 import Link from "next/link";
-import { Sparkles, Globe } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-
-const columns = [
-  {
-    title: "Appointy",
-    links: [
-      { label: "Salons entdecken", href: "#salons" },
-      { label: "Für Kund:innen", href: "#fuer-kunden" },
-      { label: "Für Salons & Partner", href: "#fuer-salons" },
-      { label: "Preise für Salons", href: "#" },
-    ],
-  },
-  {
-    title: "Unternehmen",
-    links: [
-      { label: "Über uns", href: "#" },
-      { label: "Karriere", href: "#" },
-      { label: "Presse", href: "#" },
-      { label: "Blog", href: "#" },
-    ],
-  },
-  {
-    title: "Rechtliches",
-    links: [
-      { label: "Impressum", href: "#" },
-      { label: "Datenschutz", href: "#" },
-      { label: "AGB", href: "#" },
-      { label: "Cookie-Einstellungen", href: "#" },
-    ],
-  },
-];
-
-const languages = ["Deutsch (DE)", "English (EN)", "Français (FR)", "Italiano (IT)"];
+import { useLocale } from "@/components/locale-provider";
 
 export function SiteFooter() {
+  const { t } = useLocale();
+
+  const columns = [
+    {
+      title: t.footer.appointyHeading,
+      links: [
+        { label: t.footer.discoverSalons, href: "/salons" },
+        { label: t.footer.forCustomers, href: "/#fuer-kunden" },
+        { label: t.footer.forSalonsPartners, href: "/#fuer-salons" },
+        { label: t.footer.pricing, href: "#" },
+      ],
+    },
+    {
+      title: t.footer.companyHeading,
+      links: [
+        { label: t.footer.about, href: "#" },
+        { label: t.footer.careers, href: "#" },
+        { label: t.footer.press, href: "#" },
+        { label: t.footer.blog, href: "#" },
+      ],
+    },
+    {
+      title: t.footer.legalHeading,
+      links: [
+        { label: t.footer.impressum, href: "#" },
+        { label: t.footer.privacy, href: "#" },
+        { label: t.footer.terms, href: "#" },
+        { label: t.footer.cookies, href: "#" },
+      ],
+    },
+  ];
+
   return (
     <footer className="border-t border-border bg-card/40">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
@@ -46,23 +49,7 @@ export function SiteFooter() {
               </span>
               <span className="font-heading text-lg tracking-tight">Appointy</span>
             </Link>
-            <p className="mt-4 max-w-xs text-sm text-muted-foreground">
-              Die Buchungsplattform für Salons, Barbers und Beauty-Profis —
-              gebaut für Kund:innen, die es unkompliziert wollen, und Salons,
-              die es professionell wollen.
-            </p>
-
-            <label className="mt-6 inline-flex w-fit items-center gap-2 rounded-full border border-border bg-background px-3.5 py-1.5 text-sm text-muted-foreground">
-              <Globe className="size-3.5" />
-              <select
-                defaultValue={languages[0]}
-                className="bg-transparent text-foreground outline-none"
-              >
-                {languages.map((lang) => (
-                  <option key={lang}>{lang}</option>
-                ))}
-              </select>
-            </label>
+            <p className="mt-4 max-w-xs text-sm text-muted-foreground">{t.footer.description}</p>
           </div>
 
           {columns.map((column) => (
@@ -88,7 +75,7 @@ export function SiteFooter() {
 
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Appointy GmbH. Alle Rechte vorbehalten.
+            © {new Date().getFullYear()} Appointy GmbH. {t.footer.rights}
           </p>
         </div>
       </div>

@@ -5,13 +5,26 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { Search, MapPin, CalendarDays, ArrowRight, Star, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { salons } from "@/lib/mock-data";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useLocale } from "@/components/locale-provider";
+import { useSalonSearch } from "@/components/search-provider";
+import { LocationAutocomplete } from "@/components/location-autocomplete";
+import { salons, salonCategories, categoryLabel, type SalonCategory } from "@/lib/mock-data";
 
 const previewSalons = salons.slice(0, 2);
 const timeSlots = ["09:30", "10:00", "11:15", "14:00", "16:30"];
 
 export function HeroSection() {
+  const { t } = useLocale();
+  const { category, setCategory, location, setLocation, submitSearch } = useSalonSearch();
   const sectionRef = React.useRef<HTMLElement>(null);
+
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ["start start", "end end"],
@@ -37,15 +50,15 @@ export function HeroSection() {
           >
             <span className="mb-5 flex items-center gap-1.5 text-sm text-muted-foreground">
               <Star className="size-3.5 fill-accent text-accent" />
-              4,8 von 5 · 210.000 Buchungen im letzten Jahr
+              {t.hero.ratingLine}
             </span>
             <h1 className="font-heading max-w-3xl text-[2.6rem] leading-[1.05] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
-              Dein nächster Termin, <span className="text-primary">drei Klicks</span> entfernt.
+              {t.hero.headlineBefore}
+              <span className="text-primary">{t.hero.headlineAccent}</span>
+              {t.hero.headlineAfter}
             </h1>
             <p className="mt-5 max-w-xl text-balance text-base text-muted-foreground sm:text-lg">
-              Appointy verbindet dich mit den besten Salons, Barbers und
-              Beauty-Studios in deiner Stadt — in Echtzeit buchbar, jederzeit
-              stornierbar.
+              {t.hero.subtitle}
             </p>
           </motion.div>
 
@@ -56,27 +69,48 @@ export function HeroSection() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="flex flex-1 items-center gap-2.5 rounded-xl px-3.5 py-2.5 sm:border-r sm:border-border">
                 <Search className="size-4 shrink-0 text-primary" />
-                <Input
-                  placeholder="Service — z. B. Balayage"
-                  className="h-6 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-                />
+                <Select
+                  value={category ?? "all"}
+                  onValueChange={(value) =>
+                    setCategory(!value || value === "all" ? null : (value as SalonCategory))
+                  }
+                >
+                  <SelectTrigger className="h-6 w-full border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 [&_svg]:ml-auto">
+                    <SelectValue>
+                      {(value: SalonCategory | "all") =>
+                        value === "all" ? t.hero.searchService : categoryLabel(t, value)
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t.categories.all}</SelectItem>
+                    {salonCategories.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {categoryLabel(t, c)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex flex-1 items-center gap-2.5 rounded-xl px-3.5 py-2.5 sm:border-r sm:border-border">
                 <MapPin className="size-4 shrink-0 text-primary" />
-                <Input
-                  placeholder="Stadt oder PLZ"
+                <LocationAutocomplete
+                  value={location}
+                  onChange={setLocation}
+                  onSubmit={submitSearch}
+                  placeholder={t.hero.searchCity}
                   className="h-6 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
                 />
               </div>
               <div className="flex flex-1 items-center gap-2.5 rounded-xl px-3.5 py-2.5">
                 <CalendarDays className="size-4 shrink-0 text-primary" />
                 <Input
-                  placeholder="Heute"
+                  placeholder={t.hero.searchDate}
                   className="h-6 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
                 />
               </div>
-              <Button size="lg" className="rounded-xl sm:w-auto">
-                Suchen
+              <Button size="lg" className="rounded-xl sm:w-auto" onClick={submitSearch}>
+                {t.hero.searchSubmit}
                 <ArrowRight className="size-4" />
               </Button>
             </div>
@@ -95,11 +129,11 @@ export function HeroSection() {
           >
             <div className="flex items-center justify-between border-b border-border pb-4">
               <div>
-                <p className="font-heading text-lg">Verfügbar in der Nähe</p>
-                <p className="text-sm text-muted-foreground">Berlin, Mitte · Heute</p>
+                <p className="font-heading text-lg">{t.hero.previewTitle}</p>
+                <p className="text-sm text-muted-foreground">{t.hero.previewSubtitle}</p>
               </div>
               <span className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:inline-flex">
-                Live-Vorschau
+                {t.hero.previewLive}
               </span>
             </div>
 
@@ -120,7 +154,7 @@ export function HeroSection() {
                     </p>
                   </div>
                   <Button size="sm" variant="secondary" className="rounded-full">
-                    Buchen
+                    {t.hero.previewBook}
                   </Button>
                 </div>
               ))}
