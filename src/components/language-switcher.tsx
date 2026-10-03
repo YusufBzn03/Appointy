@@ -18,8 +18,14 @@ export function LanguageSwitcher() {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="ghost" size="icon" aria-label="Sprache wechseln / Change language">
-            <Globe className="size-4" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 rounded-full"
+            aria-label="Sprache wechseln / Change language"
+          >
+            <Globe className="size-3.5" />
+            <span className="uppercase">{locale}</span>
           </Button>
         }
       />

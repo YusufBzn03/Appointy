@@ -14,6 +14,7 @@ import {
   Plus,
   X,
   MessageSquareText,
+  Smartphone,
   Calendar,
   Mail,
   UserPlus,
@@ -27,13 +28,16 @@ import { Progress } from "@/components/ui/progress";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useLocale } from "@/components/locale-provider";
+import { useAuth } from "@/components/auth-provider";
 import { treatmentDefs, treatmentLabel, type TreatmentId } from "@/lib/mock-data";
+import { parseAddress, submitOnboarding } from "@/lib/supabase/onboarding";
 
 type Path = "auto" | "manual";
 
 export function OnboardingWizard() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const router = useRouter();
+  const { available, session, role } = useAuth();
 
   const steps = [
     t.onboarding.stepPath,
@@ -60,12 +64,54 @@ export function OnboardingWizard() {
   const [customInput, setCustomInput] = React.useState("");
 
   const [smsEnabled, setSmsEnabled] = React.useState(true);
+  const [pushEnabled, setPushEnabled] = React.useState(true);
+  const [emailEnabled, setEmailEnabled] = React.useState(true);
+  const [pushRegistered, setPushRegistered] = React.useState(false);
 
   const [connections, setConnections] = React.useState({ google: false, outlook: false, email: false });
   const [staff, setStaff] = React.useState<string[]>([]);
   const [staffInput, setStaffInput] = React.useState("");
 
+  const [hoursOpen, setHoursOpen] = React.useState("09:00");
+  const [hoursClose, setHoursClose] = React.useState("18:00");
+  const [openDays, setOpenDays] = React.useState<number[]>([1, 2, 3, 4, 5, 6]);
+
   const [submitted, setSubmitted] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState<string | null>(null);
+
+  // 2024-01-07 is a Sunday, so day index 0..6 maps to Sun..Sat like Postgres' extract(dow).
+  const weekdayLabel = (d: number) =>
+    new Date(2024, 0, 7 + d).toLocaleDateString(locale === "sr" ? "sr-Latn" : locale, { weekday: "short" });
+
+  function toggleDay(d: number) {
+    setOpenDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+  }
+
+  /** Writes everything to Supabase when configured; without a backend the wizard stays a simulation. */
+  async function submit() {
+    setSubmitError(null);
+    if (!available) return setSubmitted(true);
+    if (!session || role !== "salon_owner") return setSubmitError(t.onboarding.signInRequired);
+    setSubmitting(true);
+    try {
+      await submitOnboarding({
+        name: businessName.trim(),
+        address,
+        phone: phone.trim(),
+        treatments: selectedTreatments,
+        hours: { days: openDays, opens: hoursOpen, closes: hoursClose },
+        staff,
+        notifications: { push: pushEnabled, sms: smsEnabled, email: emailEnabled },
+      });
+      setSubmitted(true);
+    } catch (err) {
+      console.error("onboarding failed:", err);
+      setSubmitError(t.onboarding.submitError);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   function toggleTreatment(id: TreatmentId) {
     setSelectedTreatments((prev) =>
@@ -103,7 +149,13 @@ export function OnboardingWizard() {
   // language, independent of the onboarding UI language, so it stays untranslated here.
   const smsPreview = `Neuer Termin! Morgen, 11:00 Uhr | Haarschnitt & Styling | Kunde: Max Mustermann | Tel: +49 151 2345 6789`;
 
-  const canLeaveBusinessStep = businessName.trim() !== "" && phone.trim() !== "";
+  // With a backend the address must contain a postal code + city (salons.postal_code/city are NOT NULL).
+  const canLeaveBusinessStep =
+    businessName.trim() !== "" &&
+    phone.trim() !== "" &&
+    openDays.length > 0 &&
+    hoursClose > hoursOpen &&
+    (!available || parseAddress(address) !== null);
 
   function next() {
     setStep((s) => Math.min(s + 1, steps.length - 1));
@@ -253,11 +305,14 @@ export function OnboardingWizard() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="ob-address">
-                          {t.onboarding.addressLabel}{" "}
-                          <span className="text-muted-foreground">({t.common.optional})</span>
-                        </Label>
-                        <Input id="ob-address" value={address} onChange={(e) => setAddress(e.target.value)} />
+                        <Label htmlFor="ob-address">{t.onboarding.addressLabel}</Label>
+                        <Input
+                          id="ob-address"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Musterstraße 12, 10115 Berlin"
+                        />
+                        <p className="text-xs text-muted-foreground">{t.onboarding.addressHint}</p>
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="ob-phone">{t.onboarding.phoneLabel}</Label>
@@ -269,6 +324,28 @@ export function OnboardingWizard() {
                           placeholder="+49 30 1234 5678"
                         />
                         <p className="text-xs text-muted-foreground">{t.onboarding.phoneHint}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t.onboarding.hoursLabel}</Label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => toggleDay(d)}
+                              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                                openDays.includes(d) ? "border-primary bg-primary/10" : "border-border text-muted-foreground"
+                              }`}
+                            >
+                              {weekdayLabel(d)}
+                            </button>
+                          ))}
+                        </div>
+                        <div dir="ltr" className="flex items-center gap-2">
+                          <Input type="time" value={hoursOpen} onChange={(e) => setHoursOpen(e.target.value)} className="w-32" />
+                          <span className="text-muted-foreground">–</span>
+                          <Input type="time" value={hoursClose} onChange={(e) => setHoursClose(e.target.value)} className="w-32" />
+                        </div>
                       </div>
                     </>
                   )}
@@ -335,6 +412,39 @@ export function OnboardingWizard() {
                       <p className="mt-1 text-sm text-muted-foreground">{t.onboarding.smsDesc}</p>
                     </div>
                     <Switch checked={smsEnabled} onCheckedChange={setSmsEnabled} aria-label={t.onboarding.smsToggleLabel} />
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-4">
+                    <div className="flex items-start gap-3">
+                      <Smartphone className="mt-0.5 size-5 shrink-0 text-primary" />
+                      <div>
+                        <p className="font-medium">{t.notify.channelPush}</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">{t.notify.channelPushDesc}</p>
+                        {pushEnabled && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={pushRegistered ? "secondary" : "outline"}
+                            className="mt-2 rounded-full"
+                            onClick={() => setPushRegistered(true)}
+                          >
+                            {pushRegistered ? t.notify.pushRegistered : t.notify.pushRegister}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <Switch checked={pushEnabled} onCheckedChange={setPushEnabled} aria-label={t.notify.channelPush} />
+                  </div>
+
+                  <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-4">
+                    <div className="flex items-start gap-3">
+                      <Mail className="mt-0.5 size-5 shrink-0 text-primary" />
+                      <div>
+                        <p className="font-medium">{t.notify.channelEmail}</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">{t.notify.channelEmailDesc}</p>
+                      </div>
+                    </div>
+                    <Switch checked={emailEnabled} onCheckedChange={setEmailEnabled} aria-label={t.notify.channelEmail} />
                   </div>
 
                   <div>
@@ -436,6 +546,8 @@ export function OnboardingWizard() {
                           false,
                         ],
                         [t.onboarding.smsToggleLabel, smsEnabled ? "✓" : "—", false],
+                        [t.notify.channelPush, pushEnabled ? (pushRegistered ? "✓" : "…") : "—", false],
+                        [t.notify.channelEmail, emailEnabled ? "✓" : "—", false],
                         [
                           t.onboarding.calendarTitle,
                           Object.entries(connections)
@@ -461,6 +573,12 @@ export function OnboardingWizard() {
           </AnimatePresence>
         </div>
 
+        {submitError && (
+          <p className="mt-4 text-sm text-destructive" role="alert">
+            {submitError}
+          </p>
+        )}
+
         <div className="mt-6 flex items-center justify-between">
           <Button variant="ghost" onClick={back} disabled={step === 0} className="rounded-xl">
             <ArrowLeft className="size-4" />
@@ -478,7 +596,7 @@ export function OnboardingWizard() {
               <ArrowRight className="size-4" />
             </Button>
           ) : (
-            <Button onClick={() => setSubmitted(true)} className="rounded-xl">
+            <Button onClick={submit} disabled={submitting} className="rounded-xl">
               {t.onboarding.submitButton}
               <Check className="size-4" />
             </Button>

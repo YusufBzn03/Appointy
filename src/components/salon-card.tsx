@@ -5,10 +5,18 @@ import { Star, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/components/locale-provider";
+import * as React from "react";
+import { BookingDialog } from "@/components/booking-dialog";
+import { useSalonData } from "@/components/salon-data-provider";
 import { treatmentLabel, type Salon } from "@/lib/mock-data";
+import { formatRelativeDateTime } from "@/lib/format";
+
 
 export function SalonCard({ salon, delay = 0 }: { salon: Salon; delay?: number }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
+  const { source } = useSalonData();
+  const [bookingOpen, setBookingOpen] = React.useState(false);
+  const nextSlot = salon.nextSlotAt ? formatRelativeDateTime(salon.nextSlotAt, locale) : salon.nextSlot;
 
   return (
     <motion.article
@@ -34,11 +42,13 @@ export function SalonCard({ salon, delay = 0 }: { salon: Salon; delay?: number }
             {salon.badge}
           </Badge>
         )}
-        <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-background px-2.5 py-1 text-xs font-medium">
-          <Star className="size-3 fill-accent text-accent" />
-          {salon.rating}
-          <span className="text-muted-foreground">({salon.reviews})</span>
-        </div>
+        {salon.reviews > 0 && (
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-background px-2.5 py-1 text-xs font-medium">
+            <Star className="size-3 fill-accent text-accent" />
+            {salon.rating}
+            <span className="text-muted-foreground">({salon.reviews})</span>
+          </div>
+        )}
       </div>
 
       <div className="p-5">
@@ -46,22 +56,27 @@ export function SalonCard({ salon, delay = 0 }: { salon: Salon; delay?: number }
           <div>
             <p className="font-medium">{salon.name}</p>
             <p className="text-sm text-muted-foreground">
-              {salon.city} · {treatmentLabel(t, salon.treatments[0])}
+              {[salon.city, salon.treatments[0] && treatmentLabel(t, salon.treatments[0])].filter(Boolean).join(" · ")}
             </p>
           </div>
           <span className="text-sm text-muted-foreground">{"€".repeat(salon.priceLevel)}</span>
         </div>
 
         <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="size-3.5" />
-            {t.showcase.nextSlot}: {salon.nextSlot}
-          </span>
-          <Button size="sm" variant="secondary" className="rounded-full">
+          {nextSlot ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="size-3.5" />
+              {t.showcase.nextSlot}: {nextSlot}
+            </span>
+          ) : (
+            <span />
+          )}
+          <Button size="sm" variant="secondary" className="rounded-full" onClick={() => setBookingOpen(true)}>
             {t.showcase.bookButton}
           </Button>
         </div>
       </div>
+      <BookingDialog salon={salon} live={source === "supabase"} open={bookingOpen} onOpenChange={setBookingOpen} />
     </motion.article>
   );
 }

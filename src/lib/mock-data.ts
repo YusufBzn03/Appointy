@@ -11,7 +11,7 @@ import {
   Droplets,
 } from "lucide-react";
 import type { Dictionary } from "@/lib/i18n";
-import { distanceKm, postalCodeGeo } from "@/lib/geo";
+import { distanceKm, postalCodeGeo, type GeoPoint } from "@/lib/geo";
 
 export type TreatmentId =
   | "haircut"
@@ -73,11 +73,16 @@ export type Salon = {
   city: string;
   /** Used for the "within X km" search filter via postalCodeGeo in src/lib/geo.ts. */
   postalCode: string;
+  /** Real coordinates (Supabase rows); mock salons fall back to postalCodeGeo. */
+  lat?: number;
+  lng?: number;
   rating: number;
   reviews: number;
   priceLevel: 1 | 2 | 3;
   badge?: string;
   nextSlot: string;
+  /** ISO timestamp from next_free_slots() for live salons; formatted per locale in the card. */
+  nextSlotAt?: string;
   gradient: string;
 };
 
@@ -237,11 +242,39 @@ export const salons: Salon[] = [
   },
 ];
 
+export type TimeWindow = "any" | "morning" | "afternoon" | "evening";
+
 export type SalonFilter = {
   category: SalonCategory | null;
   /** Free-typed city name or postal code from the search bar. */
   location: string;
+  /** Browser geolocation; when set it replaces `location` as the radius origin. */
+  origin?: GeoPoint | null;
+  /** ISO date (YYYY-MM-DD) the customer wants to book. */
+  date?: string;
+  window?: TimeWindow;
 };
+
+/** Mock opening pattern per salon (weekday 0 = Sunday); unlisted salons are open every day, all day. */
+const salonAvailability: Record<string, { closedDays: number[]; windows: Exclude<TimeWindow, "any">[] }> = {
+  "obsidian-cuts": { closedDays: [0], windows: ["morning", "afternoon", "evening"] },
+  "atelier-lune": { closedDays: [0, 1], windows: ["morning", "afternoon"] },
+  "maison-nail": { closedDays: [0], windows: ["afternoon", "evening"] },
+  "verde-barber": { closedDays: [0], windows: ["morning", "afternoon"] },
+  "the-brow-house": { closedDays: [0, 1], windows: ["afternoon", "evening"] },
+  "sequoia-spa": { closedDays: [1], windows: ["morning", "afternoon", "evening"] },
+};
+
+function salonPoint(s: Salon): GeoPoint | undefined {
+  return s.lat !== undefined && s.lng !== undefined ? { lat: s.lat, lng: s.lng } : postalCodeGeo[s.postalCode];
+}
+
+function hasSlot(salon: Salon, date?: string, window: TimeWindow = "any"): boolean {
+  const a = salonAvailability[salon.id];
+  if (!a) return true;
+  if (date && a.closedDays.includes(new Date(`${date}T12:00:00`).getDay())) return false;
+  return window === "any" || a.windows.includes(window);
+}
 
 /**
  * Filters salons by category and, when `location` matches a postal code we have
@@ -255,12 +288,24 @@ export function filterSalons(pool: Salon[], filter: SalonFilter, radiusKm = 20):
     result = result.filter((s) => s.category === filter.category);
   }
 
-  const query = filter.location.trim();
+  if (filter.origin) {
+    const origin = filter.origin;
+    result = result.filter((s) => {
+      const target = salonPoint(s);
+      return target ? distanceKm(origin, target) <= radiusKm : false;
+    });
+  }
+
+  if (filter.date || (filter.window && filter.window !== "any")) {
+    result = result.filter((s) => hasSlot(s, filter.date, filter.window));
+  }
+
+  const query = filter.origin ? "" : filter.location.trim();
   if (query) {
     const origin = postalCodeGeo[query];
     if (origin) {
       result = result.filter((s) => {
-        const target = postalCodeGeo[s.postalCode];
+        const target = salonPoint(s);
         return target ? distanceKm(origin, target) <= radiusKm : false;
       });
     } else {
@@ -317,8 +362,11 @@ export const staffMembers: StaffMember[] = [
   },
 ];
 
+export type NotifyChannel = "push" | "sms" | "email";
+
 export type SmsLogEntry = {
   id: string;
+  channels: NotifyChannel[];
   timestamp: string;
   customer: string;
   treatment: TreatmentId;
@@ -327,10 +375,10 @@ export type SmsLogEntry = {
 };
 
 export const smsLog: SmsLogEntry[] = [
-  { id: "sms-1", timestamp: "Heute, 09:14", customer: "Nadine H.", treatment: "haircut", time: "Heute, 16:30", phone: "+49 151 2345 6781" },
-  { id: "sms-2", timestamp: "Heute, 08:02", customer: "Elif T.", treatment: "coloring", time: "Morgen, 11:00", phone: "+49 176 9988 1122" },
-  { id: "sms-3", timestamp: "Gestern, 19:47", customer: "Paul S.", treatment: "beard", time: "Fr, 09:30", phone: "+49 152 4432 8890" },
-  { id: "sms-4", timestamp: "Gestern, 14:20", customer: "Mira K.", treatment: "coloring", time: "Sa, 13:00", phone: "+49 160 7712 3345" },
+  { id: "sms-1", channels: ["push", "sms", "email"], timestamp: "Heute, 09:14", customer: "Nadine H.", treatment: "haircut", time: "Heute, 16:30", phone: "+49 151 2345 6781" },
+  { id: "sms-2", channels: ["push", "sms"], timestamp: "Heute, 08:02", customer: "Elif T.", treatment: "coloring", time: "Morgen, 11:00", phone: "+49 176 9988 1122" },
+  { id: "sms-3", channels: ["push", "email"], timestamp: "Gestern, 19:47", customer: "Paul S.", treatment: "beard", time: "Fr, 09:30", phone: "+49 152 4432 8890" },
+  { id: "sms-4", channels: ["sms", "email"], timestamp: "Gestern, 14:20", customer: "Mira K.", treatment: "coloring", time: "Sa, 13:00", phone: "+49 160 7712 3345" },
 ];
 
 export const dashboardStats = {
@@ -365,4 +413,13 @@ export const adminStats = {
   totalBookings: 128430,
   smsSent: 41870,
   smsCostEur: 2094,
+  pushSent: 96240,
+  emailSent: 128430,
+  infraCostEur: 3474,
+  infraBreakdown: [
+    { name: "Supabase", costEur: 1240 },
+    { name: "Twilio", costEur: 2094 },
+    { name: "Resend", costEur: 140 },
+    { name: "Expo Push", costEur: 0 },
+  ],
 };

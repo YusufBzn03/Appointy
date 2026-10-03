@@ -32,6 +32,13 @@ export type Dictionary = {
     searchService: string;
     searchCity: string;
     searchDate: string;
+    searchNearby: string;
+    searchNearbyLocating: string;
+    searchNearbyDenied: string;
+    windowAny: string;
+    windowMorning: string;
+    windowAfternoon: string;
+    windowEvening: string;
     searchSubmit: string;
     previewTitle: string;
     previewSubtitle: string;
@@ -140,6 +147,10 @@ export type Dictionary = {
     salonTitle: string;
     salonSubtitle: string;
     startOnboarding: string;
+    authError: string;
+    authCheckEmail: string;
+    signOut: string;
+    authUnavailable: string;
   };
   onboarding: {
     title: string;
@@ -186,6 +197,10 @@ export type Dictionary = {
     successTitle: string;
     successDesc: string;
     goToDashboard: string;
+    addressHint: string;
+    hoursLabel: string;
+    submitError: string;
+    signInRequired: string;
   };
   dashboard: {
     title: string;
@@ -226,5 +241,48 @@ export type Dictionary = {
     approveAction: string;
     suspendAction: string;
     editAction: string;
+  };
+  notify: {
+    hubTab: string;
+    channelsTitle: string;
+    channelPush: string;
+    channelPushDesc: string;
+    channelSms: string;
+    channelSmsDesc: string;
+    channelEmail: string;
+    channelEmailDesc: string;
+    pushRegister: string;
+    pushRegistered: string;
+    pushTokenHint: string;
+    adminPushSent: string;
+    adminEmailSent: string;
+    adminInfraCost: string;
+    adminDispatchTitle: string;
+    adminInfraTitle: string;
+  };
+  booking: {
+    title: string;
+    stepTreatment: string;
+    stepStaff: string;
+    anyStaff: string;
+    stepTime: string;
+    noSlots: string;
+    yourName: string;
+    yourPhone: string;
+    confirmButton: string;
+    successTitle: string;
+    successDesc: string;
+    signInFirst: string;
+    slotTaken: string;
+    minutes: string;
+    errorGeneric: string;
+    demoOnly: string;
+  };
+  live: {
+    signInAsOwner: string;
+    signInAsAdmin: string;
+    noSalonYet: string;
+    pendingNotice: string;
+    loadError: string;
   };
 };

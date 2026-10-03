@@ -5,12 +5,12 @@ import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/components/locale-provider";
 import { SalonCard } from "@/components/salon-card";
-import { salons, partnerStats } from "@/lib/mock-data";
-
-const featured = salons.slice(0, 3);
+import { useSalonData } from "@/components/salon-data-provider";
+import { partnerStats } from "@/lib/mock-data";
 
 export function PartnerShowcase() {
   const { t } = useLocale();
+  const featured = useSalonData().salons.slice(0, 3);
 
   return (
     <section className="relative py-24 sm:py-32">

@@ -9,6 +9,8 @@ import {
   Users,
   Gauge,
   MessageSquareText,
+  Smartphone,
+  Mail,
   Check,
   Circle,
 } from "lucide-react";
@@ -23,32 +25,64 @@ import {
   treatmentLabel,
   staffMembers,
   smsLog,
+  type NotifyChannel,
   dashboardStats,
   type TreatmentId,
+  type SmsLogEntry,
+  type StaffMember,
 } from "@/lib/mock-data";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth-provider";
+import { formatRelativeDateTime } from "@/lib/format";
+import {
+  fetchOwnerSalon,
+  fetchDashboard,
+  setTreatmentOffered,
+  saveChannels,
+  type DashboardStats,
+  type LiveDashboard,
+} from "@/lib/supabase/dashboard";
 
 const weekdayIndex = [0, 1, 2, 3, 4, 5, 6];
 
-export function SalonDashboard() {
+type ViewProps = {
+  salonLine: string;
+  notice?: string;
+  stats: DashboardStats;
+  staff: StaffMember[];
+  log: SmsLogEntry[];
+  offered: TreatmentId[];
+  onToggleTreatment: (id: TreatmentId) => void;
+  channels: Record<NotifyChannel, boolean>;
+  onChannelChange: (id: NotifyChannel, enabled: boolean) => void;
+};
+
+function DashboardView({
+  salonLine,
+  notice,
+  stats: s,
+  staff,
+  log,
+  offered: offeredTreatments,
+  onToggleTreatment,
+  channels,
+  onChannelChange,
+}: ViewProps) {
   const { t } = useLocale();
-  const [smsEnabled, setSmsEnabled] = React.useState(true);
-  const [offeredTreatments, setOfferedTreatments] = React.useState<TreatmentId[]>([
-    "haircut",
-    "coloring",
-    "beard",
-  ]);
+  const [pushRegistered, setPushRegistered] = React.useState(false);
 
-  function toggleTreatment(id: TreatmentId) {
-    setOfferedTreatments((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }
-
+  const channelMeta: { id: NotifyChannel; icon: typeof Smartphone; title: string; desc: string }[] = [
+    { id: "push", icon: Smartphone, title: t.notify.channelPush, desc: t.notify.channelPushDesc },
+    { id: "sms", icon: MessageSquareText, title: t.notify.channelSms, desc: t.notify.channelSmsDesc },
+    { id: "email", icon: Mail, title: t.notify.channelEmail, desc: t.notify.channelEmailDesc },
+  ];
+  const channelIcon = Object.fromEntries(channelMeta.map((c) => [c.id, c.icon])) as Record<NotifyChannel, typeof Smartphone>;
   const stats = [
-    { icon: CalendarDays, label: t.dashboard.todayBookings, value: String(dashboardStats.todayBookings) },
-    { icon: TrendingUp, label: t.dashboard.weekRevenue, value: `${dashboardStats.weekRevenueEur.toLocaleString()} €` },
-    { icon: Gauge, label: t.dashboard.utilization, value: `${dashboardStats.utilizationPercent}%` },
-    { icon: Users, label: t.dashboard.newCustomers, value: String(dashboardStats.newCustomers) },
+    { icon: CalendarDays, label: t.dashboard.todayBookings, value: String(s.todayBookings) },
+    { icon: TrendingUp, label: t.dashboard.weekRevenue, value: `${s.weekRevenueEur.toLocaleString()} €` },
+    { icon: Gauge, label: t.dashboard.utilization, value: `${s.utilizationPercent}%` },
+    { icon: Users, label: t.dashboard.newCustomers, value: String(s.newCustomers) },
   ];
 
   return (
@@ -70,7 +104,8 @@ export function SalonDashboard() {
 
       <div className="mx-auto max-w-6xl px-4 py-10 sm:py-14">
         <h1 className="font-heading text-3xl tracking-tight sm:text-4xl">{t.dashboard.title}</h1>
-        <p className="mt-1 text-muted-foreground">Obsidian Cuts · Berlin, Mitte</p>
+        <p className="mt-1 text-muted-foreground">{salonLine}</p>
+        {notice && <p className="mt-3 rounded-lg bg-accent/15 px-3 py-2 text-sm">{notice}</p>}
 
         <Tabs defaultValue="overview" className="mt-8">
           <TabsList>
@@ -78,7 +113,7 @@ export function SalonDashboard() {
             <TabsTrigger value="calendar">{t.dashboard.calendarTab}</TabsTrigger>
             <TabsTrigger value="staff">{t.dashboard.staffTab}</TabsTrigger>
             <TabsTrigger value="treatments">{t.dashboard.treatmentsTab}</TabsTrigger>
-            <TabsTrigger value="sms">{t.dashboard.smsTab}</TabsTrigger>
+            <TabsTrigger value="sms">{t.notify.hubTab}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-6">
@@ -98,7 +133,7 @@ export function SalonDashboard() {
             <p className="mt-1 text-sm text-muted-foreground">{t.dashboard.staffCalendarDesc}</p>
 
             <div className="mt-5 space-y-3">
-              {staffMembers.map((member) => (
+              {staff.map((member) => (
                 <div key={member.id} className="rounded-xl border border-border p-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">{member.name}</p>
@@ -130,7 +165,7 @@ export function SalonDashboard() {
 
           <TabsContent value="staff" className="mt-6">
             <div className="grid gap-3 sm:grid-cols-2">
-              {staffMembers.map((member) => (
+              {staff.map((member) => (
                 <div key={member.id} className="rounded-xl border border-border p-4">
                   <div className="flex items-center justify-between">
                     <p className="font-medium">{member.name}</p>
@@ -157,7 +192,7 @@ export function SalonDashboard() {
               {treatmentDefs.map((def) => (
                 <button
                   key={def.id}
-                  onClick={() => toggleTreatment(def.id)}
+                  onClick={() => onToggleTreatment(def.id)}
                   className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
                     offeredTreatments.includes(def.id)
                       ? "border-primary bg-primary/10"
@@ -173,23 +208,57 @@ export function SalonDashboard() {
           </TabsContent>
 
           <TabsContent value="sms" className="mt-6 space-y-6">
-            <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-4">
-              <div>
-                <p className="font-medium">{t.dashboard.smsHubTitle}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{t.dashboard.smsHubDesc}</p>
+            <div>
+              <p className="font-medium">{t.notify.channelsTitle}</p>
+              <div className="mt-3 space-y-2.5">
+                {channelMeta.map((c) => (
+                  <div key={c.id} className="flex items-start justify-between gap-4 rounded-xl border border-border p-4">
+                    <div className="flex items-start gap-3">
+                      <c.icon className="mt-0.5 size-5 shrink-0 text-primary" />
+                      <div>
+                        <p className="font-medium">{c.title}</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">{c.desc}</p>
+                        {c.id === "push" && channels.push && (
+                          <div className="mt-2 flex items-center gap-2 text-xs">
+                            {pushRegistered ? (
+                              <Badge>{t.notify.pushRegistered}</Badge>
+                            ) : (
+                              <button
+                                onClick={() => setPushRegistered(true)}
+                                className="rounded-full border border-border px-3 py-1 hover:bg-muted/60"
+                              >
+                                {t.notify.pushRegister}
+                              </button>
+                            )}
+                            <span className="text-muted-foreground">{t.notify.pushTokenHint}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={channels[c.id]}
+                      onCheckedChange={(v) => onChannelChange(c.id, v)}
+                      aria-label={c.title}
+                    />
+                  </div>
+                ))}
               </div>
-              <Switch checked={smsEnabled} onCheckedChange={setSmsEnabled} aria-label={t.dashboard.smsToggleLabel} />
             </div>
 
             <div>
               <p className="mb-3 text-sm font-medium text-muted-foreground">{t.dashboard.smsLogTitle}</p>
               <div className="space-y-2">
-                {smsLog.map((entry) => (
+                {log.map((entry) => (
                   <div
                     key={entry.id}
                     className="flex items-start gap-3 rounded-xl border border-border p-3 text-sm"
                   >
-                    <MessageSquareText className="mt-0.5 size-4 shrink-0 text-primary" />
+                    <div className="mt-0.5 flex shrink-0 gap-1">
+                      {entry.channels.map((ch) => {
+                        const Icon = channelIcon[ch];
+                        return <Icon key={ch} className="size-4 text-primary" />;
+                      })}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate">
                         {entry.customer} · {treatmentLabel(t, entry.treatment)} · {entry.time}
@@ -208,4 +277,132 @@ export function SalonDashboard() {
       </div>
     </div>
   );
+}
+
+/** Centered message page for the not-signed-in / no-salon / error states. */
+function DashboardGate({ message, action }: { message?: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4 text-center">
+      {message ? <p className="max-w-sm text-muted-foreground">{message}</p> : <Loader2 className="size-6 animate-spin text-muted-foreground" />}
+      {action}
+    </div>
+  );
+}
+
+function MockDashboard() {
+  const [offered, setOffered] = React.useState<TreatmentId[]>(["haircut", "coloring", "beard"]);
+  const [channels, setChannels] = React.useState<Record<NotifyChannel, boolean>>({ push: true, sms: true, email: true });
+  return (
+    <DashboardView
+      salonLine="Obsidian Cuts · Berlin, Mitte"
+      stats={dashboardStats}
+      staff={staffMembers}
+      log={smsLog}
+      offered={offered}
+      onToggleTreatment={(id) => setOffered((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))}
+      channels={channels}
+      onChannelChange={(id, v) => setChannels((prev) => ({ ...prev, [id]: v }))}
+    />
+  );
+}
+
+function LiveDashboardView() {
+  const { t, locale } = useLocale();
+  const { session, role, loading: authLoading } = useAuth();
+  const [data, setData] = React.useState<LiveDashboard | null>(null);
+  const [state, setState] = React.useState<"loading" | "ready" | "no-salon" | "error">("loading");
+  const userId = session?.user.id;
+  const allowed = role === "salon_owner" || role === "admin";
+
+  React.useEffect(() => {
+    if (!userId || !allowed) return;
+    let cancelled = false;
+    fetchOwnerSalon(userId)
+      .then((salon) => (salon ? fetchDashboard(salon) : null))
+      .then((d) => {
+        if (cancelled) return;
+        setData(d);
+        setState(d ? "ready" : "no-salon");
+      })
+      .catch((err) => {
+        console.error("dashboard load failed:", err);
+        if (!cancelled) setState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, allowed]);
+
+  const home = (
+    <Button variant="outline" className="rounded-full" nativeButton={false} render={<Link href="/" />}>
+      Appointy
+    </Button>
+  );
+  if (authLoading || (session && role === null)) return <DashboardGate />;
+  if (!session || !allowed) return <DashboardGate message={t.live.signInAsOwner} action={home} />;
+  if (state === "error") return <DashboardGate message={t.live.loadError} />;
+  if (state === "no-salon")
+    return (
+      <DashboardGate
+        message={t.live.noSalonYet}
+        action={
+          <Button className="rounded-full" nativeButton={false} render={<Link href="/onboarding" />}>
+            {t.auth.startOnboarding}
+          </Button>
+        }
+      />
+    );
+  if (!data) return <DashboardGate />;
+
+  // Optimistic updates; on failure the server state is re-read so the UI never lies.
+  async function toggleTreatment(id: TreatmentId) {
+    if (!data) return;
+    const enable = !data.offered.includes(id);
+    setData({ ...data, offered: enable ? [...data.offered, id] : data.offered.filter((x) => x !== id) });
+    try {
+      await setTreatmentOffered(data.salon.id, id, enable, data.staff.map((m) => m.id));
+    } catch (err) {
+      console.error(err);
+      setData(await fetchDashboard(data.salon));
+    }
+  }
+
+  async function changeChannel(id: NotifyChannel, enabled: boolean) {
+    if (!data) return;
+    const channels = { ...data.channels, [id]: enabled };
+    setData({ ...data, channels });
+    try {
+      await saveChannels(data.salon.id, channels);
+    } catch (err) {
+      console.error(err);
+      setData(await fetchDashboard(data.salon));
+    }
+  }
+
+  return (
+    <DashboardView
+      salonLine={`${data.salon.name} · ${data.salon.city}`}
+      notice={data.salon.status === "pending" ? t.live.pendingNotice : undefined}
+      stats={data.stats}
+      staff={data.staff}
+      log={data.log.map((e) => ({
+        id: e.id,
+        channels: e.channels,
+        timestamp: formatRelativeDateTime(e.createdAt, locale) + (e.failed ? " · ⚠" : ""),
+        customer: e.customer,
+        treatment: e.treatment,
+        time: formatRelativeDateTime(e.startsAt, locale),
+        phone: e.phone,
+      }))}
+      offered={data.offered}
+      onToggleTreatment={toggleTreatment}
+      channels={data.channels}
+      onChannelChange={changeChannel}
+    />
+  );
+}
+
+export function SalonDashboard() {
+  const { available } = useAuth();
+  return available ? <LiveDashboardView /> : <MockDashboard />;
 }

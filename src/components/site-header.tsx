@@ -16,11 +16,13 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { AuthModal } from "@/components/auth-modal";
+import { useAuth } from "@/components/auth-provider";
+import { useSalonData } from "@/components/salon-data-provider";
 import { useLocale } from "@/components/locale-provider";
 import { useSalonSearch } from "@/components/search-provider";
 import {
-  salons,
   unlockedTreatments,
+  treatmentDefs,
   treatmentLabel,
   salonCategories,
   categoryLabel,
@@ -35,7 +37,16 @@ export function SiteHeader() {
   const categoryHeight = useTransform(scrollY, [0, 140], [44, 0]);
   const [authTab, setAuthTab] = React.useState<"customer" | "salon" | null>(null);
 
-  const treatments = React.useMemo(() => unlockedTreatments(salons), []);
+  const { salons, availableTreatmentIds } = useSalonData();
+  const { session, signOut } = useAuth();
+  // Live data: the available_treatments view decides; mock data derives the same rule from the salons.
+  const treatments = React.useMemo(
+    () =>
+      availableTreatmentIds
+        ? treatmentDefs.filter((d) => availableTreatmentIds.includes(d.id))
+        : unlockedTreatments(salons),
+    [availableTreatmentIds, salons]
+  );
 
   return (
     <header className="fixed inset-x-0 top-0 z-50">
@@ -92,9 +103,9 @@ export function SiteHeader() {
               variant="ghost"
               size="sm"
               className="hidden sm:inline-flex"
-              onClick={() => setAuthTab("customer")}
+              onClick={() => (session ? signOut() : setAuthTab("customer"))}
             >
-              {t.nav.login}
+              {session ? t.auth.signOut : t.nav.login}
             </Button>
             <Button size="sm" className="rounded-full" onClick={() => setAuthTab("salon")}>
               {t.nav.becomePartner}

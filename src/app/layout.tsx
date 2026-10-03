@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LocaleProvider } from "@/components/locale-provider";
+import { AuthProvider } from "@/components/auth-provider";
+import { SalonDataProvider } from "@/components/salon-data-provider";
 import { BackToTop } from "@/components/back-to-top";
 import "./globals.css";
 
@@ -46,8 +48,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           disableTransitionOnChange
         >
           <LocaleProvider>
-            {children}
-            <BackToTop />
+            <AuthProvider>
+              <SalonDataProvider>
+                {children}
+                <BackToTop />
+              </SalonDataProvider>
+            </AuthProvider>
           </LocaleProvider>
         </ThemeProvider>
       </body>

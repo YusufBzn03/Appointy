@@ -1,0 +1,30 @@
+project_id = "appointy"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage"]
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[storage]
+enabled = true
+
+[edge_runtime]
+enabled = true
+
+# Called by the Database Webhook / pg_cron; the shared secret is checked inside the function.
+[functions.dispatch-notifications]
+verify_jwt = false
